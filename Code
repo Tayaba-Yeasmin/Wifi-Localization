@@ -1,0 +1,109 @@
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+import tensorflow as tf
+from tensorflow import keras
+
+
+
+
+df = pd.read_csv("wifi_localization.txt", sep="\s+", header=None)
+
+print("Shape:", df.shape)
+print(df.head())
+
+
+X = df.iloc[:, :-1]
+y = df.iloc[:, -1]
+
+le = LabelEncoder()
+y_encoded = le.fit_transform(y)
+
+
+
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y_encoded, test_size=0.2, random_state=42
+)
+
+
+
+ml_model = RandomForestClassifier(n_estimators=100, random_state=42)
+ml_model.fit(X_train, y_train)
+
+ml_pred = ml_model.predict(X_test)
+ml_acc = accuracy_score(y_test, ml_pred)
+
+print("ML Accuracy:", ml_acc)
+
+
+# Scaling (important for DL)
+scaler = StandardScaler()
+
+X_train_dl = scaler.fit_transform(X_train)
+X_test_dl = scaler.transform(X_test)
+
+# Neural Network
+dl_model = keras.Sequential([
+    keras.layers.Dense(64, activation='relu', input_shape=(X_train_dl.shape[1],)),
+    keras.layers.Dense(128, activation='relu'),
+    keras.layers.Dense(64, activation='relu'),
+    keras.layers.Dense(len(np.unique(y_encoded)), activation='softmax')
+])
+
+dl_model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+history = dl_model.fit(
+    X_train_dl, y_train,
+    epochs=20,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=0
+)
+
+dl_loss, dl_acc = dl_model.evaluate(X_test_dl, y_test, verbose=0)
+
+print("DL Accuracy:", dl_acc)
+
+
+
+plt.figure()
+
+plt.bar(["ML (Random Forest)", "Deep Learning (NN)"], [ml_acc, dl_acc])
+
+plt.title("WiFi Localization: ML vs DL")
+plt.ylabel("Accuracy")
+
+plt.show()
+
+
+
+
+plt.figure()
+
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+
+plt.title("Deep Learning Training Curve")
+plt.legend()
+
+plt.show()
+
+
+sample = X_test.iloc[0].values.reshape(1, -1)
+sample_scaled = scaler.transform(sample)
+
+pred = dl_model.predict(sample_scaled)
+
+print("Predicted Location:", le.inverse_transform([np.argmax(pred)]))
